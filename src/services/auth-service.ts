@@ -2,8 +2,9 @@ import {
   getDefaultDashboardPath,
   getSafeCallbackUrl,
 } from "@/lib/auth/routing";
-import type { ApiResponse, LoginResponse } from "@/types";
-import type { LoginInput } from "@/validations";
+import { signIn, signOut } from "next-auth/react";
+import type { ApiResponse, RegisterResponse } from "@/types";
+import type { LoginInput, RegisterInput } from "@/validations";
 
 type AuthFailureCode =
   | "INVALID_CREDENTIALS"
@@ -32,6 +33,8 @@ export type SignOutResult =
       success: true;
     }
   | AuthFailure;
+
+export type RegisterResult = LoginSuccess | AuthFailure;
 
 async function parseApiResponse<T>(response: Response) {
   try {
@@ -147,24 +150,88 @@ export async function loginWithEmailPassword(
   const callbackUrl = getSafeCallbackUrl(options?.callbackUrl);
 
   try {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify(credentials),
+    const result = await signIn("credentials", {
+      email: credentials.email,
+      password: credentials.password,
+      role: credentials.role,
+      redirect: false,
+      callbackUrl:
+        callbackUrl ?? getDefaultDashboardPath(credentials.role),
     });
-    const payload = await parseApiResponse<LoginResponse>(response);
 
-    if (!response.ok || !payload || !payload.success) {
-      return normalizeApiFailure(response.status, payload);
+    if (!result) {
+      return {
+        success: false,
+        code: "UNKNOWN_ERROR",
+        message: "We could not sign you in. Please try again.",
+      };
+    }
+
+    if (result.error) {
+      return {
+        success: false,
+        code: "INVALID_CREDENTIALS",
+        message: "Invalid email, password, or role.",
+        status: 401,
+      };
     }
 
     return {
       success: true,
       redirectTo:
-        callbackUrl ?? getDefaultDashboardPath(payload.data.session.user.role),
+        result.url ?? callbackUrl ?? getDefaultDashboardPath(credentials.role),
+    };
+  } catch (error) {
+    return normalizeUnexpectedFailure(error);
+  }
+}
+
+export async function registerWithEmailPassword(
+  input: RegisterInput,
+  options?: {
+    callbackUrl?: string | null;
+  },
+): Promise<RegisterResult> {
+  const callbackUrl = getSafeCallbackUrl(options?.callbackUrl);
+
+  try {
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(input),
+    });
+    const payload = await parseApiResponse<RegisterResponse>(response);
+
+    if (!response.ok || !payload || !payload.success) {
+      return normalizeApiFailure(response.status, payload);
+    }
+
+    const signInResult = await signIn("credentials", {
+      email: input.email,
+      password: input.password,
+      role: input.role ?? "STUDENT",
+      redirect: false,
+      callbackUrl:
+        callbackUrl ?? getDefaultDashboardPath(input.role ?? "STUDENT"),
+    });
+
+    if (!signInResult || signInResult.error) {
+      return {
+        success: false,
+        code: "UNKNOWN_ERROR",
+        message: "Account created, but we could not start your session automatically.",
+      };
+    }
+
+    return {
+      success: true,
+      redirectTo:
+        signInResult.url ??
+        callbackUrl ??
+        getDefaultDashboardPath(payload.data.user.role),
     };
   } catch (error) {
     return normalizeUnexpectedFailure(error);
@@ -173,21 +240,10 @@ export async function loginWithEmailPassword(
 
 export async function signOutFromSession(): Promise<SignOutResult> {
   try {
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-      },
+    await signOut({
+      redirect: false,
+      callbackUrl: "/auth/login",
     });
-    const payload = await parseApiResponse<{ signedOut: boolean }>(response);
-
-    if (response.status === 401) {
-      return { success: true };
-    }
-
-    if (!response.ok || !payload || !payload.success) {
-      return normalizeApiFailure(response.status, payload);
-    }
 
     return { success: true };
   } catch (error) {

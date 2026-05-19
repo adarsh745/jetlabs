@@ -2,7 +2,7 @@
  * Custom hook for API data fetching with TanStack Query.
  *
  * Provides typed, cached data fetching for dashboard pages.
- * When the backend is connected, these replace direct mock data imports.
+ * These hooks consume the live dashboard API routes.
  */
 "use client";
 

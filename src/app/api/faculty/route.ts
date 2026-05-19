@@ -1,24 +1,22 @@
-/**
- * Faculty API route - GET /api/faculty
- *
- * Returns faculty-specific data: batches, teams, review queue.
- */
-import { NextResponse } from "next/server";
-import { apiError } from "@/lib/api/response";
-import { AuthError, requireRole } from "@/lib/auth/session";
-import type { ApiResponse, Batch } from "@/types";
-import { BATCHES } from "@/data/mock";
+import { apiError, apiSuccess } from "@/lib/api/response";
+import { AuthError, getSessionUserRole, requireRole } from "@/lib/auth/session";
+import { getFacultyBatchSummaries } from "@/services/dashboard-service";
 
 export async function GET() {
   try {
-    await requireRole("FACULTY", "ADMIN");
+    const session = await requireRole("FACULTY", "ADMIN");
+    const role = getSessionUserRole(session);
 
-    const response: ApiResponse<Batch[]> = {
-      success: true,
-      data: BATCHES,
-    };
+    if (!role) {
+      throw new AuthError("FORBIDDEN", 403);
+    }
 
-    return NextResponse.json(response);
+    const batches = await getFacultyBatchSummaries({
+      viewerRole: role,
+      viewerUserId: session.user.id,
+    });
+
+    return apiSuccess(batches);
   } catch (error) {
     if (error instanceof AuthError) {
       return apiError({

@@ -11,14 +11,14 @@ export default async function DashboardLayout({
   const role = getSessionUserRole(session);
 
   if (!role) {
-    redirect("/login?reason=expired");
+    redirect("/auth/login?reason=expired");
   }
 
   return (
     <DashboardShell
       user={{
         name: session.user.name,
-        email: session.user.email,
+        email: session.user.email ?? "",
         role,
       }}
     >

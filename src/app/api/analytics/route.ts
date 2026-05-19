@@ -1,34 +1,22 @@
-/**
- * Analytics API route - GET /api/analytics
- *
- * Returns analytics data for the dashboard.
- * Returns placeholder data until the analytics tables are connected.
- */
-import { NextResponse } from "next/server";
-import { apiError } from "@/lib/api/response";
-import { AuthError, requireRole } from "@/lib/auth/session";
-import type { ApiResponse, BatchAnalytics } from "@/types";
-import { BATCHES } from "@/data/mock";
+import { apiError, apiSuccess } from "@/lib/api/response";
+import { AuthError, getSessionUserRole, requireRole } from "@/lib/auth/session";
+import { getBatchAnalyticsForViewer } from "@/services/dashboard-service";
 
 export async function GET() {
   try {
-    await requireRole("FACULTY", "ADMIN");
+    const session = await requireRole("FACULTY", "ADMIN");
+    const role = getSessionUserRole(session);
 
-    const data: BatchAnalytics[] = BATCHES.map((batch) => ({
-      batchId: batch.id,
-      batchName: batch.name,
-      avgProgress: batch.avgProgress,
-      avgAttendance: 75,
-      atRiskCount: batch.pendingReviews,
-      totalStudents: batch.students,
-    }));
+    if (!role) {
+      throw new AuthError("FORBIDDEN", 403);
+    }
 
-    const response: ApiResponse<BatchAnalytics[]> = {
-      success: true,
-      data,
-    };
+    const analytics = await getBatchAnalyticsForViewer({
+      viewerRole: role,
+      viewerUserId: session.user.id,
+    });
 
-    return NextResponse.json(response);
+    return apiSuccess(analytics);
   } catch (error) {
     if (error instanceof AuthError) {
       return apiError({

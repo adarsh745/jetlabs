@@ -1,29 +1,14 @@
-export {
-  AUTH_AUDIENCE,
-  AUTH_COOKIE_NAME,
-  AUTH_ISSUER,
-  SESSION_MAX_AGE_SECONDS,
-  getAuthSecret,
-  getSessionCookieOptions,
-  getSessionExpiryDate,
-} from "./config";
-export {
-  signAuthToken,
-  verifyAuthToken,
-  type VerifiedAuthToken,
-} from "./jwt";
+export { AUTH_LOGIN_PATH, SESSION_MAX_AGE_SECONDS, getAuthSecret } from "./config";
+export { authOptions } from "./options";
 export { hashPassword, verifyPassword } from "./password";
 export {
-  clearSessionCookie,
-  createSession,
-  deleteSession,
+  getAuthSession,
   getSession,
   getSessionUserRole,
   requirePageRole,
   requirePageSession,
   requireRole,
   requireSession,
-  setSessionCookie,
   type AuthSession,
   type AuthSessionUser,
   AuthError,

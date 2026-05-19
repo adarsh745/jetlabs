@@ -1,26 +1,43 @@
 /**
  * Authentication and authorization types.
- * These mirror the Prisma User and Session models.
+ * These mirror the Auth.js session payload and the AOIP user model.
  */
 
 export const USER_ROLES = ["STUDENT", "FACULTY", "ADMIN"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
+export const LOGIN_ROLES = ["STUDENT", "FACULTY"] as const;
+export type LoginRole = (typeof LOGIN_ROLES)[number];
+
+export type RoleSwitcherOption = {
+  value: LoginRole;
+  label: string;
+  description: string;
+};
+
+export type AuthRoleContent = {
+  eyebrow: string;
+  description: string;
+  emailPlaceholder: string;
+  passwordPlaceholder: string;
+  accessNote: string;
+};
+
+export type AuthHeroStat = {
+  value: string;
+  label: string;
+  description: string;
+};
 
 export type AuthUser = {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  emailVerified: boolean;
-  isActive: boolean;
-  lastLoginAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  avatar: string | null;
 };
 
 export type Session = {
-  id: string;
-  expiresAt: string;
+  expires: string;
   user: AuthUser;
 };
 
@@ -31,6 +48,10 @@ export type LoginCredentials = {
 
 export type LoginResponse = {
   session: Session;
+};
+
+export type RegisterResponse = {
+  user: AuthUser;
 };
 
 /**

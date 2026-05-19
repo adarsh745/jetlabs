@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Syntra — Academic Innovation Platform",
+  title: "Syntra AOIP",
   description:
-    "The structured execution OS for college innovation cells. Weekly tracking, IEEE paper workflow, faculty review — all in one place.",
+    "Academic Operating System for research workflow, execution tracking, reviews, submissions, and evaluation lifecycle.",
 };
 
 export default function RootLayout({
@@ -30,7 +30,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col bg-background text-foreground">
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -1,8 +1,8 @@
 import type { UserRole } from "@/types/auth";
 
 export const DASHBOARD_PATHS: Record<UserRole, string> = {
-  STUDENT: "/student",
-  FACULTY: "/faculty",
+  STUDENT: "/student/dashboard",
+  FACULTY: "/faculty/dashboard",
   ADMIN: "/admin",
 };
 

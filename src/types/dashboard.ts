@@ -96,7 +96,12 @@ export type Student = {
   team: string;
   project: string;
   projectStatus: "On track" | "Delayed" | "Inactive" | "At risk";
-  paperStatus: "Not started" | "Drafting" | "Under review" | "Approved";
+  paperStatus:
+    | "Not started"
+    | "Drafting"
+    | "Under review"
+    | "Approved"
+    | "Published";
   attendance: { month: string; pct: number }[];
   attendanceOverall: number;
   backlogs: Backlog[];

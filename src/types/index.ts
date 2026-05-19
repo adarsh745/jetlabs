@@ -7,3 +7,4 @@ export * from "./dashboard";
 export * from "./analytics";
 export * from "./roadmap";
 export * from "./api";
+export * from "./aoip";

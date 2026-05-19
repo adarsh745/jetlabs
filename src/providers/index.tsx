@@ -6,17 +6,20 @@
  */
 "use client";
 
+import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
 import { QueryProvider } from "./query-provider";
 import { ThemeProvider } from "./theme-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider>
-      <QueryProvider>
-        {children}
-        <Toaster closeButton richColors position="top-center" />
-      </QueryProvider>
-    </ThemeProvider>
+    <SessionProvider>
+      <ThemeProvider>
+        <QueryProvider>
+          {children}
+          <Toaster closeButton richColors position="top-center" />
+        </QueryProvider>
+      </ThemeProvider>
+    </SessionProvider>
   );
 }

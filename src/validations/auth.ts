@@ -1,10 +1,14 @@
 /**
- * Zod validation schema for authentication.
+ * Zod validation schemas for authentication.
  * Used in both API routes (server validation) and forms (client validation).
  */
 import { z } from "zod";
+import { LOGIN_ROLES, type LoginRole } from "@/types/auth";
 
-const emailAddressSchema = z.string().email("Enter a valid email address");
+const emailAddressSchema = z.string().email("Enter a valid college email address");
+const uppercaseCharacter = /[A-Z]/;
+const lowercaseCharacter = /[a-z]/;
+const numericCharacter = /\d/;
 
 function trimString(value: string) {
   return value.trim();
@@ -14,16 +18,79 @@ function normalizeEmail(value: string) {
   return trimString(value).toLowerCase();
 }
 
+function normalizeLoginRole(value: unknown): LoginRole {
+  return value === "FACULTY" ? "FACULTY" : "STUDENT";
+}
+
 export const loginSchema = z
   .object({
+    role: z.enum(LOGIN_ROLES).default("STUDENT"),
     email: z.string(),
     password: z.string(),
   })
-  .transform(({ email, password }) => ({
+  .transform(({ role, email, password }) => ({
+    role,
     email: normalizeEmail(email),
     password: trimString(password),
   }))
   .superRefine((value, ctx) => {
+    if (!value.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: "College email is required",
+      });
+    } else if (!emailAddressSchema.safeParse(value.email).success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: "Enter a valid college email address",
+      });
+    }
+
+    if (!value.password) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Password is required",
+      });
+    }
+  });
+
+export const registerSchema = z
+  .object({
+    name: z.string(),
+    email: z.string(),
+    password: z.string(),
+    role: z.enum(["STUDENT", "FACULTY", "ADMIN"]).optional(),
+  })
+  .transform(({ name, email, password, role }) => ({
+    name: trimString(name),
+    email: normalizeEmail(email),
+    password: trimString(password),
+    role: role ?? "STUDENT",
+  }))
+  .superRefine((value, ctx) => {
+    if (!value.name) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "Name is required",
+      });
+    } else if (value.name.length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "Name must be at least 2 characters",
+      });
+    } else if (value.name.length > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "Name is too long",
+      });
+    }
+
     if (!value.email) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -44,16 +111,159 @@ export const loginSchema = z
         path: ["password"],
         message: "Password is required",
       });
+    } else if (value.password.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Password must be at least 8 characters",
+      });
+    } else if (value.password.length > 72) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Password must be 72 characters or fewer",
+      });
+    } else {
+      if (!uppercaseCharacter.test(value.password)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["password"],
+          message: "Password must contain at least one uppercase letter",
+        });
+      }
+
+      if (!lowercaseCharacter.test(value.password)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["password"],
+          message: "Password must contain at least one lowercase letter",
+        });
+      }
+
+      if (!numericCharacter.test(value.password)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["password"],
+          message: "Password must contain at least one number",
+        });
+      }
     }
   });
 
-export type LoginInput = z.infer<typeof loginSchema>;
+export const registerFormSchema = z
+  .object({
+    role: z.enum(LOGIN_ROLES).default("STUDENT"),
+    name: z.string(),
+    email: z.string(),
+    password: z.string(),
+    confirmPassword: z.string(),
+  })
+  .transform(({ role, name, email, password, confirmPassword }) => ({
+    role,
+    name: trimString(name),
+    email: normalizeEmail(email),
+    password: trimString(password),
+    confirmPassword: trimString(confirmPassword),
+  }))
+  .superRefine((value, ctx) => {
+    if (!value.name) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "Full name is required",
+      });
+    } else if (value.name.length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "Full name must be at least 2 characters",
+      });
+    }
+
+    if (!value.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: "College email is required",
+      });
+    } else if (!emailAddressSchema.safeParse(value.email).success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["email"],
+        message: "Enter a valid college email address",
+      });
+    }
+
+    if (!value.password) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Password is required",
+      });
+    } else if (value.password.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Password must be at least 8 characters",
+      });
+    } else if (value.password.length > 72) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["password"],
+        message: "Password must be 72 characters or fewer",
+      });
+    } else {
+      if (!uppercaseCharacter.test(value.password)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["password"],
+          message: "Password must contain at least one uppercase letter",
+        });
+      }
+
+      if (!lowercaseCharacter.test(value.password)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["password"],
+          message: "Password must contain at least one lowercase letter",
+        });
+      }
+
+      if (!numericCharacter.test(value.password)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["password"],
+          message: "Password must contain at least one number",
+        });
+      }
+    }
+
+    if (!value.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmPassword"],
+        message: "Confirm your password",
+      });
+    } else if (value.password !== value.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmPassword"],
+        message: "Passwords do not match",
+      });
+    }
+  });
+
+export type LoginFormValues = z.input<typeof loginSchema>;
+export type LoginInput = z.output<typeof loginSchema>;
+export type RegisterFormValues = z.input<typeof registerFormSchema>;
+export type RegisterFormInput = z.output<typeof registerFormSchema>;
+export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginFieldOrder = ["email", "password"] as const;
 export type LoginField = (typeof loginFieldOrder)[number];
 export type LoginValidationErrors = Partial<Record<LoginField, string>>;
 
-function getLoginValidationErrors(error: z.ZodError<LoginInput>) {
+function getLoginValidationErrors(error: z.ZodError<LoginFormValues>) {
   const errors: LoginValidationErrors = {};
 
   for (const field of loginFieldOrder) {
@@ -67,7 +277,7 @@ function getLoginValidationErrors(error: z.ZodError<LoginInput>) {
   return errors;
 }
 
-export function validateLoginInput(input: LoginInput):
+export function validateLoginInput(input: LoginFormValues):
   | {
       success: true;
       data: LoginInput;
@@ -88,6 +298,7 @@ export function validateLoginInput(input: LoginInput):
   }
 
   const data: LoginInput = {
+    role: normalizeLoginRole(input.role),
     email: normalizeEmail(input.email),
     password: trimString(input.password),
   };
@@ -102,7 +313,7 @@ export function validateLoginInput(input: LoginInput):
   };
 }
 
-export function validateLoginField(field: LoginField, input: LoginInput) {
+export function validateLoginField(field: LoginField, input: LoginFormValues) {
   const result = validateLoginInput(input);
 
   if (result.success) {

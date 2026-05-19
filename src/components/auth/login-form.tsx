@@ -1,46 +1,48 @@
 "use client";
 
+import { useEffect, useState, type FocusEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  startTransition,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-  type ReactNode,
-} from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  BookOpen,
-  Eye,
-  EyeOff,
-  LoaderCircle,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+  Controller,
+  useForm,
+  useWatch,
+  type FieldErrors,
+} from "react-hook-form";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, LoaderCircle, Orbit, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AuthInputField } from "@/components/auth/auth-input-field";
+import { RoleSwitcher } from "@/components/auth/role-switcher";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  AUTH_ASSURANCE_ICON,
+  AUTH_SELF_SERVICE_NOTE,
+  LOGIN_ROLE_CONTENT,
+  LOGIN_ROLE_OPTIONS,
+  SYNTRA_BRAND_NAME,
+  SYNTRA_FORGOT_PASSWORD_HREF,
+} from "@/lib/auth/presentation";
 import { getSafeCallbackUrl } from "@/lib/auth/routing";
 import { loginWithEmailPassword } from "@/services/auth-service";
+import type { LoginRole } from "@/types/auth";
 import {
-  type LoginField,
+  loginSchema,
+  type LoginFormValues,
   type LoginInput,
-  type LoginValidationErrors,
-  validateLoginField,
-  validateLoginInput,
 } from "@/validations";
 
-const EMPTY_LOGIN_INPUT: LoginInput = {
+const DEFAULT_LOGIN_VALUES: LoginFormValues = {
+  role: "STUDENT",
   email: "",
   password: "",
 };
+
+const REMEMBER_ME_KEY = "syntra.auth.prefill";
+const AssuranceIcon = AUTH_ASSURANCE_ICON ?? ShieldCheck;
 
 function getLoginReasonMessage(reason: string | null) {
   switch (reason) {
@@ -53,97 +55,134 @@ function getLoginReasonMessage(reason: string | null) {
   }
 }
 
-function setFieldError(
-  current: LoginValidationErrors,
-  field: LoginField,
-  error?: string,
-) {
-  if (!error) {
-    const next = { ...current };
-    delete next[field];
-    return next;
-  }
-
-  return {
-    ...current,
-    [field]: error,
-  };
+function normalizeSelectedRole(value: unknown): LoginRole {
+  return value === "FACULTY" ? "FACULTY" : "STUDENT";
 }
 
-export function LoginForm() {
+type LoginFormProps = {
+  callbackUrl?: string | null;
+  reason?: string | null;
+};
+
+export function LoginForm({ callbackUrl, reason }: LoginFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const emailRef = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
-  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl"));
-  const loginReason = getLoginReasonMessage(searchParams.get("reason"));
-  const [formData, setFormData] = useState<LoginInput>(EMPTY_LOGIN_INPUT);
-  const [errors, setErrors] = useState<LoginValidationErrors>({});
-  const [formError, setFormError] = useState<string | null>(loginReason);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const safeCallbackUrl = getSafeCallbackUrl(callbackUrl);
+  const [rememberMe, setRememberMe] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    try {
+      return Boolean(window.localStorage.getItem(REMEMBER_ME_KEY));
+    } catch {
+      return false;
+    }
+  });
+  const [formError, setFormError] = useState<string | null>(
+    getLoginReasonMessage(reason ?? null),
+  );
   const [showPassword, setShowPassword] = useState(false);
+  const {
+    control,
+    handleSubmit,
+    setFocus,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues, undefined, LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: DEFAULT_LOGIN_VALUES,
+    mode: "onBlur",
+    reValidateMode: "onChange",
+  });
 
-  function focusField(field: LoginField | null) {
-    if (field === "email") {
-      emailRef.current?.focus();
-      return;
-    }
+  const activeRole = normalizeSelectedRole(
+    useWatch({
+      control,
+      name: "role",
+      defaultValue: DEFAULT_LOGIN_VALUES.role,
+    }),
+  );
+  const roleContent = LOGIN_ROLE_CONTENT[activeRole];
 
-    if (field === "password") {
-      passwordRef.current?.focus();
-    }
-  }
+  useEffect(() => {
+    try {
+      const rawValue = window.localStorage.getItem(REMEMBER_ME_KEY);
 
-  function handleChange(field: LoginField) {
-    return (event: ChangeEvent<HTMLInputElement>) => {
-      const nextValue = event.target.value;
+      if (!rawValue) {
+        return;
+      }
 
-      setFormData((current) => ({
-        ...current,
-        [field]: nextValue,
-      }));
-
-      setErrors((current) => setFieldError(current, field));
-      setFormError(null);
-    };
-  }
-
-  function handleBlur(field: LoginField) {
-    return () => {
-      const nextData = {
-        ...formData,
-        [field]: formData[field].trim(),
+      const parsed = JSON.parse(rawValue) as {
+        email?: string;
+        role?: LoginRole;
       };
 
-      setFormData(nextData);
-      setErrors((current) =>
-        setFieldError(current, field, validateLoginField(field, nextData)),
-      );
-    };
+      if (parsed.email) {
+        setValue("email", parsed.email, { shouldDirty: false });
+      }
+
+      if (parsed.role) {
+        setValue("role", normalizeSelectedRole(parsed.role), {
+          shouldDirty: false,
+        });
+      }
+    } catch {
+      window.localStorage.removeItem(REMEMBER_ME_KEY);
+    }
+  }, [setValue]);
+
+  function clearErrorState() {
+    if (formError) {
+      setFormError(null);
+    }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const validation = validateLoginInput(formData);
-    setFormData(validation.data);
-
-    if (!validation.success) {
-      setErrors(validation.errors);
-      setFormError(null);
-      focusField(validation.firstField);
+  function focusInvalidField(fieldErrors: FieldErrors<LoginFormValues>) {
+    if (fieldErrors.email) {
+      setFocus("email");
       return;
     }
 
-    setErrors({});
-    setFormError(null);
-    setIsSubmitting(true);
+    if (fieldErrors.password) {
+      setFocus("password");
+    }
+  }
 
-    const result = await loginWithEmailPassword(validation.data, {
-      callbackUrl,
+  function normalizeEmailOnBlur(event: FocusEvent<HTMLInputElement>) {
+    setValue("email", event.target.value.trim().toLowerCase(), {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
     });
+  }
 
-    setIsSubmitting(false);
+  function normalizePasswordOnBlur(event: FocusEvent<HTMLInputElement>) {
+    setValue("password", event.target.value.trim(), {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  }
+
+  async function onSubmit(values: LoginInput) {
+    clearErrorState();
+
+    try {
+      if (rememberMe) {
+        window.localStorage.setItem(
+          REMEMBER_ME_KEY,
+          JSON.stringify({ email: values.email, role: values.role }),
+        );
+      } else {
+        window.localStorage.removeItem(REMEMBER_ME_KEY);
+      }
+    } catch {
+      // Ignore storage failures and continue the sign-in flow.
+    }
+
+    const result = await loginWithEmailPassword(values, {
+      callbackUrl: safeCallbackUrl,
+    });
 
     if (!result.success) {
       setFormError(result.message);
@@ -157,173 +196,222 @@ export function LoginForm() {
       }
 
       if (result.code === "INVALID_CREDENTIALS") {
-        passwordRef.current?.focus();
+        setFocus("password");
       }
 
       return;
     }
 
     toast.success("Signed in successfully.");
-    startTransition(() => {
-      router.replace(result.redirectTo);
-      router.refresh();
-    });
+    router.replace(result.redirectTo);
+  }
+
+  function onInvalid(fieldErrors: FieldErrors<LoginFormValues>) {
+    clearErrorState();
+    focusInvalidField(fieldErrors);
   }
 
   return (
-    <div className="grid min-h-screen w-full bg-background lg:grid-cols-2">
-      <div className="hidden flex-col justify-between bg-gradient-to-br from-slate-950 via-sky-950 to-slate-900 p-12 text-white lg:flex">
-        <div className="flex items-center gap-2">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-white/10 backdrop-blur">
-            <Sparkles className="size-5" />
-          </div>
-          <span className="font-medium">Syntra</span>
-        </div>
-
-        <div className="max-w-md space-y-6">
-          <h1 className="text-4xl leading-tight tracking-tight">
-            Run real projects.
-            <br />
-            Publish real research.
-          </h1>
-          <p className="text-white/70">
-            Syntra gives authenticated students, faculty, and admins one shared
-            workspace for execution tracking, review workflows, and research
-            delivery.
-          </p>
-          <div className="grid grid-cols-3 gap-3 pt-4">
-            <LoginStat
-              icon={<BookOpen className="size-4" />}
-              value="Protected"
-              label="Workflows"
-            />
-            <LoginStat
-              icon={<ShieldCheck className="size-4" />}
-              value="Role-based"
-              label="Access"
-            />
-            <LoginStat
-              icon={<Sparkles className="size-4" />}
-              value="Real"
-              label="Sessions"
-            />
-          </div>
-        </div>
-
-        <p className="text-xs text-white/40">
-          Access is determined by your account permissions after sign-in.
-        </p>
-      </div>
-
-      <div className="flex items-center justify-center p-6 lg:p-12">
-        <Card className="w-full max-w-md border-border/70 shadow-sm">
-          <CardHeader className="space-y-3">
-            <div className="mb-1 flex items-center gap-2 lg:hidden">
-              <Sparkles className="size-5" />
-              <span className="font-medium">Syntra</span>
+    <motion.section
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
+      className="flex w-full items-center justify-center px-4 py-10 sm:px-6 lg:px-10"
+    >
+      <Card className="w-full max-w-xl border-border/80 bg-card/95 backdrop-blur">
+        <CardHeader className="space-y-6 border-b border-border/80 pb-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 items-center justify-center rounded-2xl border border-border bg-muted text-foreground">
+                <Orbit className="size-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-base font-semibold tracking-tight text-foreground">
+                  {SYNTRA_BRAND_NAME}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Academic Operating System
+                </p>
+              </div>
             </div>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>
-              Use your authorized account email and password to continue.
-            </CardDescription>
-          </CardHeader>
 
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-              {formError ? (
-                <div
-                  role="alert"
-                  aria-live="polite"
-                  className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {formError}
-                </div>
-              ) : null}
+            <Badge variant="secondary">Institution verified</Badge>
+          </div>
 
-              <AuthInputField
-                id="email"
-                name="email"
-                type="email"
-                label="Email"
-                placeholder="you@college.edu"
-                autoComplete="email"
-                inputMode="email"
-                value={formData.email}
-                onChange={handleChange("email")}
-                onBlur={handleBlur("email")}
-                error={errors.email}
-                inputRef={emailRef}
+          <div className="space-y-3">
+            <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+              {roleContent.eyebrow}
+            </p>
+            <h1 id="login-title" className="text-balance text-3xl">
+              Sign in to your execution workspace
+            </h1>
+            <p className="text-sm leading-7 text-muted-foreground sm:text-base">
+              {roleContent.description}
+            </p>
+          </div>
+
+          <Controller
+            name="role"
+            control={control}
+            render={({ field }) => (
+              <RoleSwitcher
+                ariaLabel="Select sign-in role"
+                value={normalizeSelectedRole(field.value)}
+                options={LOGIN_ROLE_OPTIONS}
                 disabled={isSubmitting}
+                onValueChange={(nextValue) => {
+                  clearErrorState();
+                  field.onChange(nextValue);
+                }}
               />
+            )}
+          />
 
-              <AuthInputField
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                label="Password"
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                value={formData.password}
-                onChange={handleChange("password")}
-                onBlur={handleBlur("password")}
-                error={errors.password}
-                inputRef={passwordRef}
-                disabled={isSubmitting}
-                trailingContent={
-                  <button
-                    type="button"
-                    className="text-muted-foreground transition hover:text-foreground focus-visible:outline-none"
-                    onClick={() => setShowPassword((current) => !current)}
-                    disabled={isSubmitting}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="size-4" />
-                    ) : (
-                      <Eye className="size-4" />
-                    )}
-                  </button>
-                }
-              />
-
-              <Button className="w-full" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <LoaderCircle className="size-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign in"
-                )}
-              </Button>
-
-              <p className="text-center text-sm text-muted-foreground">
-                Need access or password help? Contact your program administrator.
+          <div className="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-card">
+                <AssuranceIcon className="size-4 text-foreground" aria-hidden="true" />
+              </div>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {roleContent.accessNote}
               </p>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
+            </div>
+          </div>
+        </CardHeader>
 
-function LoginStat({
-  icon,
-  value,
-  label,
-}: {
-  icon: ReactNode;
-  value: string;
-  label: string;
-}) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-      <div className="flex items-center gap-1.5 text-xs text-white/60">
-        {icon}
-        {label}
-      </div>
-      <div className="mt-1 text-xl">{value}</div>
-    </div>
+        <CardContent className="pt-6">
+          <form className="space-y-6" onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate>
+            {formError ? (
+              <div
+                role="alert"
+                aria-live="polite"
+                className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
+                {formError}
+              </div>
+            ) : null}
+
+            <div className="space-y-5">
+              <Controller
+                name="email"
+                control={control}
+                render={({ field }) => (
+                  <AuthInputField
+                    id="email"
+                    name={field.name}
+                    type="email"
+                    label="College email"
+                    placeholder={roleContent.emailPlaceholder}
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    inputMode="email"
+                    value={field.value}
+                    onChange={(event) => {
+                      clearErrorState();
+                      field.onChange(event);
+                    }}
+                    onBlur={(event) => {
+                      field.onBlur();
+                      normalizeEmailOnBlur(event);
+                    }}
+                    error={errors.email?.message}
+                    inputRef={field.ref}
+                    disabled={isSubmitting}
+                  />
+                )}
+              />
+
+              <Controller
+                name="password"
+                control={control}
+                render={({ field }) => (
+                  <AuthInputField
+                    id="password"
+                    name={field.name}
+                    type={showPassword ? "text" : "password"}
+                    label="Password"
+                    placeholder={roleContent.passwordPlaceholder}
+                    autoComplete="current-password"
+                    value={field.value}
+                    onChange={(event) => {
+                      clearErrorState();
+                      field.onChange(event);
+                    }}
+                    onBlur={(event) => {
+                      field.onBlur();
+                      normalizePasswordOnBlur(event);
+                    }}
+                    error={errors.password?.message}
+                    inputRef={field.ref}
+                    disabled={isSubmitting}
+                    trailingContent={
+                      <button
+                        type="button"
+                        className="text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none"
+                        onClick={() => setShowPassword((current) => !current)}
+                        disabled={isSubmitting}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
+                        )}
+                      </button>
+                    }
+                  />
+                )}
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex items-center gap-3 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  className="size-4 rounded border border-border bg-muted text-foreground"
+                />
+                Remember my workspace
+              </label>
+
+              <a
+                href={SYNTRA_FORGOT_PASSWORD_HREF}
+                className="text-sm font-medium text-foreground transition-colors hover:text-muted-foreground"
+              >
+                Forgot password?
+              </a>
+            </div>
+
+            <Button className="h-11 w-full" type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Continue to workspace"
+              )}
+            </Button>
+
+            <div className="space-y-3 text-center">
+              <p className="text-sm text-muted-foreground">
+                New to Syntra?{" "}
+                <Link
+                  className="font-medium text-foreground underline decoration-white/20 underline-offset-4 transition-colors hover:text-muted-foreground"
+                  href="/auth/signup"
+                >
+                  Create a student account
+                </Link>
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {AUTH_SELF_SERVICE_NOTE}
+              </p>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </motion.section>
   );
 }

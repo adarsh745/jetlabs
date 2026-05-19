@@ -1,11 +1,15 @@
+import { getToken } from "next-auth/jwt";
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/auth/config";
-import { verifyAuthToken } from "@/lib/auth/jwt";
-import { isProtectedPath } from "@/lib/auth/routing";
+import { getAuthSecret } from "@/lib/auth/config";
+import {
+  getDefaultDashboardPath,
+  getRoleForPath,
+  isProtectedPath,
+} from "@/lib/auth/routing";
 
 function redirectToLogin(request: NextRequest, reason: "expired" | "unauthorized") {
   const { pathname, search } = request.nextUrl;
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = new URL("/auth/login", request.url);
 
   loginUrl.searchParams.set("reason", reason);
   loginUrl.searchParams.set("callbackUrl", `${pathname}${search}`);
@@ -20,30 +24,31 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const token = await getToken({
+    req: request,
+    secret: getAuthSecret(),
+  });
 
   if (!token) {
     return redirectToLogin(request, "unauthorized");
   }
 
-  const verified = await verifyAuthToken(token);
+  const requiredRole = getRoleForPath(pathname);
+  const tokenRole = token.role;
 
-  if (!verified.valid) {
-    const response = redirectToLogin(
-      request,
-      verified.reason === "expired" ? "expired" : "unauthorized",
+  if (
+    requiredRole &&
+    tokenRole !== "ADMIN" &&
+    tokenRole !== requiredRole
+  ) {
+    return NextResponse.redirect(
+      new URL(
+        getDefaultDashboardPath(
+          (tokenRole as "STUDENT" | "FACULTY" | "ADMIN") ?? "STUDENT",
+        ),
+        request.url,
+      ),
     );
-
-    response.cookies.set(AUTH_COOKIE_NAME, "", {
-      path: "/",
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      expires: new Date(0),
-      maxAge: 0,
-    });
-
-    return response;
   }
 
   return NextResponse.next();

@@ -28,6 +28,10 @@ yarn-error.log*
 
 # env files
 .env
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
 .env*.local
 
 # vercel
@@ -43,3 +47,16 @@ prisma/migrations/
 # IDE
 .vscode/
 .idea/
+
+# build output
+dist/
+build/
+
+# logs
+*.log
+
+# prisma client cache
+.prisma/
+
+# macOS
+DS_Store
