@@ -60,7 +60,7 @@ export const db =
   new PrismaClient({
         ...(runtimeDatabaseUrl
           ? {
-              datasourceUrl: runtimeDatabaseUrl,
+              datasources: { db: { url: runtimeDatabaseUrl } },
             }
           : {}),
         log:

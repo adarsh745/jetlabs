@@ -21,8 +21,9 @@ async function createUser(input: {
   email: string;
   role: Role;
   avatar?: string;
+  password?: string;
 }) {
-  const passwordHash = await hash(PASSWORD, 12);
+  const passwordHash = await hash(input.password || PASSWORD, 12);
 
   return prisma.user.upsert({
     where: {
@@ -45,7 +46,7 @@ async function createUser(input: {
 }
 
 async function resetAoipData() {
-  await prisma.activityEvent.deleteMany();
+  // await prisma.activityEvent.deleteMany();
   await prisma.review.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.projectMilestone.deleteMany();
@@ -62,7 +63,7 @@ async function resetAoipData() {
 async function main() {
   await resetAoipData();
 
-  const [admin, facultyA, facultyB] = await Promise.all([
+  const [admin, facultyA, facultyB, facultyAOIP] = await Promise.all([
     createUser({
       name: "Syntra Administrator",
       email: process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase() || "admin@syntra.edu",
@@ -77,6 +78,12 @@ async function main() {
       name: "Prof. Arjun Rao",
       email: "arjun.rao@syntra.edu",
       role: Role.FACULTY,
+    }),
+    createUser({
+      name: "AOIP Faculty",
+      email: "faculty@aoip.com",
+      role: Role.FACULTY,
+      password: "password123",
     }),
   ]);
 
@@ -753,6 +760,7 @@ async function main() {
   console.log("AOIP seed complete.");
   console.log(`Admin: ${admin.email}`);
   console.log(`Faculty logins: ${facultyA.email}, ${facultyB.email}`);
+  console.log(`AOIP Faculty: ${facultyAOIP.email} (password: password123)`);
   console.log(`Student login password for seeded users: ${PASSWORD}`);
 }
 
